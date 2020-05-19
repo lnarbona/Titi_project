@@ -1,0 +1,84 @@
+---
+title: "Random Forest Plot"
+author: "Narbona Sabaté, L."
+output: html_notebook
+---
+
+#Load dataset and libraries
+```{r}
+# Load the dataset
+DataTot <- read.delim('10_calls_metrics.txt')
+
+# load the libraries
+library(randomForest)
+library(VSURF)
+library(rpart)
+library(rpart.plot)
+library(ggplot2)
+library(cowplot)
+
+#Dataset with the explicative data
+Data_ctxt_excecpt_group_ind <- DataTot[, c("preda","loca","dis","Predator","Height_model","Height_ind","Num_ind","Num_In","Num_Jv","Num_Sb","Jv_fem","Sb_fem","Ad_fem","Paired_Ad","Non_paried_Ad")]
+
+random_forest <- function(variabl, dataset = Data_ctxt_excecpt_group_ind){
+  #Add the variable to explain
+  Data_ctxt_excecpt_group_ind$VAR <- DataTot[,variabl]
+
+  # Sélection des variables (peut prendre plusieurs minutes)
+  set.seed(123)
+  Vyield <- VSURF(VAR ~ ., data = Data_ctxt_excecpt_group_ind, na.action = na.omit) 
+  summary(Vyield)
+
+  # list of "prediction stpe" selected variables (column number, the predicted variable is not taken into account)
+  Vyield$varselect.pred 
+
+  # Création d'une Random Forest avec les variable sélectionnées, pour pouvoir obtenir le "% var explained"
+  (fit <- randomForest(VAR ~., data = Data_ctxt_excecpt_group_ind, na.action = na.omit,
+                      importance=TRUE))
+  impToPlot <- importance(fit)
+  dotchart(sort(impToPlot[,1]), xlim=c(0,30), xlab="%IncMSE", main="TITLE") # 500x450
+  
+  # Création d'un arbre de décision, avec les variables sélectionnées par VSURF
+  
+  YieldRT <- rpart(VAR ~., data = Data_ctxt_excecpt_group_ind)
+  png(filename=sprintf("%s.png", variabl))
+  prp(YieldRT, box.palette = "Greens", extra=1, varlen=0, main = sprintf("%s", variabl)) #850x700
+  dev.off()
+}
+
+DataTot[, c("seqID", "Name_seq","group","ind","preda","loca","dis","Predator","Height_model",
+            "Height_ind","Num_ind","Num_In","Num_Jv","Num_Sb","Jv_fem","Sb_fem","Ad_fem",
+            "Paired_Ad","Non_paried_Ad", "propB")] <- NULL
+
+for (variabl in names(DataTot)){
+  random_forest(variabl)
+}
+
+
+# Random forest
+#set.seed(1808)
+#data.imputed <- rfImpute(preda ~ ., data=DataTot, iter=6)
+#model <- randomForest(propA ~ ., data = DataTot, na.action = na.omit, proximity=TRUE, ntree=2000, mtry=46, importance=TRUE)
+#varImpPlot(model, main="Predator prediction", type=1)#Pour afficher quelles sont les meilleurs variables à utiliser
+#varImpPlot(model, main="Predator prediction", type=1, n.var=26) #ceux qui sont > que 0 sauf "Predator" psq evidentment c'est une var qui influis
+```
+
+#Different data
+
+```{r}
+#Data avec tout sauf seqID et seqCall
+#Data_except_seqid_call <- DataTot[, c("group","ind","preda","loca","dis","first_call","element","propA","propB","propC","propD","propE","meaninterval","CVinterval","NgramAA","NgramBB","NgramAB","NgramBA","NgramBD","NgramDB","NgramDD","NgSlope","entroSlope","tpSA","tpSB","tpAA","tpAB","tpBA","tpBB","tpBD","tpDB","tpDD","Predator","Height_model","Height_ind","Num_ind","Num_In","Num_Jv","Num_Sb","Jv_fem","Sb_fem","Ad_fem","Paired_Ad","Non_paried_Ad")]
+
+#Data que avec des characteristiques du context + la characteristique de la sequence testee
+#Data_All_context <- DataTot[, c("group","ind","preda","loca","dis","Predator","Height_model","Height_ind","Num_ind","Num_In","Num_Jv","Num_Sb","Jv_fem","Sb_fem","Ad_fem","Paired_Ad","Non_paried_Ad", "propB")]
+
+#Data que avec des characteristiques du ctxt, sauf groupe et ind + la characteristique de la sequence testee
+
+```
+
+#Creer RT
+
+```{r}
+#ClassRT <- rpart(propB ~ ., data = Data_ctxt_excecpt_group_ind) #Pour le créer
+#prp(ClassRT, box.palette = "Greens", extra=1, varlen=0, main = "Classes de compromis")#Pour l'afficher + customiser
+```

@@ -1,0 +1,274 @@
+---
+  title: "Rscript - 10 first calls, Titi alarm calls"
+author: "Narbona Sabaté L. & Berthet M."
+output: pdf_document
+editor_options: 
+  chunk_output_type: console
+---
+
+  ```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This script uses function for the cfp package, that needs to be installed with command 
+library(devtools)
+devtools::install_github("gobbios/cfp")
+
+Install and load the following packages:
+  
+```{r, message=FALSE, warning=FALSE}
+library(cfp)
+#library(lme4)
+#library(car)
+#library(MuMIn)
+#library(effects)
+#library(boot)
+#library(optimx)
+#library(effects)
+library(RColorBrewer)
+library(tidyverse)
+
+```
+
+#1. What do alarm sequences encode?
+The aim of this script is i) to create a data file with, for each sequence, the type of predator, the location, the distance between the caller and the predator, and the 15 metrics and ii) to infer what information is encoded by each metric with model selection
+
+
+```{r}
+
+# read data from the excel file provided with the script, "predator presentations" dataset. 
+#It contains 50 sequences of 10 calls each.
+xdata <- read.delim('Data/dataset_pred_prez_50-calls_chgd.txt')
+
+
+#Calls of each sequences are given in column, transform them into character strings
+SeqCalls <- sapply(unique(xdata$Seq1), function(X) 
+  paste0(xdata$Type_call[xdata$Seq1 == X], collapse=""))
+
+
+#combine all relevant info of each sequence (Code of the sequence, Group of the caller, 
+#type and location of the predator, distance predator-caller and call sequence) into one dataset 
+#that will be used as a template and be filled with metric values
+xdata3 <- data.frame(seqID = unique(xdata$Seq1), group=as.character(xdata$Group
+                                                                    [which(xdata$Nb_call==1)]), ind=as.character(xdata$Ind
+                                                                                                                 [which(xdata$Nb_call==1)]), preda = as.character
+                     (xdata$Cat_preda[which(xdata$Nb_call==1)]), 
+                     loca = as.character(xdata$Location[which(xdata$Nb_call==1)]), 
+                     dis = xdata$Distance[which(xdata$Nb_call==1)], seqcall = substr(SeqCalls, start = 1, stop = 10), first_call = substr(SeqCalls, start = 1, stop = 1))
+
+```
+
+
+We begin to fill up the table with the metrics
+
+## 1.a Metrics extraction
+###Slope of elements, Bayesian proportion of A-calls, mean and CV of call interval
+
+```{r}
+#Function callinterval to extract the call intervals from the sequences. 
+#Output can be the mean call interval(outp="mean") 
+#or the coefficient of variation of the call interval (outp="CV").
+callintervals <- function(xdata, seqID, seqcol, starttime, endtime, outp="mean") { 
+  temp <- xdata[xdata[, seqcol] == seqID, c(starttime, endtime)]
+  res <- temp[2:nrow(temp), 1] - temp[1:(nrow(temp)-1) , 2]
+  CV <- function(x) sd(x)/mean(x)
+  if(outp == "mean") res <- mean(res)
+  if(outp == "CV") res <- CV(res)
+  return(res)
+}
+
+#Fill the dataset with the slope of elements, the proportion of A-calls, 
+#the mean call interval and the coefficient of variation of the call interval.
+
+for(i in 1:nrow(xdata3)) {
+  xdata3$elementA[i] <- elementslope(as.character(xdata3$seqcall[i]), type="linear", target="A")
+  xdata3$elementB[i] <- elementslope(as.character(xdata3$seqcall[i]), type="linear", target="B")
+  xdata3$elementD[i] <- elementslope(as.character(xdata3$seqcall[i]), type="linear", target="D")
+  xdata3$elementE[i] <- elementslope(as.character(xdata3$seqcall[i]), type="linear", target="E")
+  xdata3$propA[i] <- elementprop(as.character(xdata3$seqcall[i]), target = "A")
+  xdata3$propB[i] <- elementprop(as.character(xdata3$seqcall[i]), target = "B")
+  xdata3$propC[i] <- elementprop(as.character(xdata3$seqcall[i]), target = "C")
+  xdata3$propD[i] <- elementprop(as.character(xdata3$seqcall[i]), target = "D")
+  xdata3$propE[i] <- elementprop(as.character(xdata3$seqcall[i]), target = "E")
+  xdata3$meaninterval[i] <- callintervals(xdata, seqID=as.character(xdata3$seqID[i]), 
+                                          seqcol="Seq1", starttime="Begin_call", endtime="End_call", outp="mean")
+  xdata3$CVinterval[i] <- callintervals(xdata, seqID=as.character(xdata3$seqID[i]), 
+                                        seqcol="Seq1", starttime="Begin_call", endtime="End_call", outp="CV")
+}
+
+#Bayesian proportion of A, B, C, BS and AS-calls (i.e. we add 1 to the number of calls in the sequence and divide 
+#by 15 (5 possibilities of calls (A,B,C,BS, and AS) + 10 calls in the sequence))
+xdata3$propA <- ((xdata3$propA*10)+1)/15
+xdata3$propB <- ((xdata3$propB*10)+1)/15
+xdata3$propC <- ((xdata3$propC*10)+1)/15
+xdata3$propD <- ((xdata3$propD*10)+1)/15
+xdata3$propE <- ((xdata3$propE*10)+1)/15
+```
+
+### Computation of ngrams
+```{r}
+peak <- 0.3183865 #Computed in script_graph
+seqID <- unique(xdata$Seq1) 
+nb_calls <- head(unique(xdata$Nb_call), -1)
+
+#ngrammes <- function(data, data2, peak=peak, seqID=seqID){
+for (id in seqID) {
+  data1 <- xdata[xdata$Seq1 == as.character(id),]
+  for (i in nb_calls){
+    for (j in 1:4){
+      end1 <- data1[data1$Nb_call == i + j - 1, "End_call"]
+      begin1 <- data1[data1$Nb_call == i + j, "Begin_call"]
+      distance1 <- begin1 - end1
+      #print(id)
+      #print(i)
+      #print("distance1 =")
+      #print(distance1)
+
+      {if(distance1 < 0 || identical(distance1, numeric(0))){
+       # print("next")
+        next}
+      else{
+#       end <- data1[data1$Nb_call == i + j - 1, "End_call"]
+#       begin <- data1[data1$Nb_call == i + j, "Begin_call"]
+#       distance <- begin - end
+       
+       {if(distance1 < peak){
+       #   print("discance littler than peak")
+      #    print(distance1)
+          
+          gramme <- "gramme-"
+          y <- i+j 
+          for (m in c(i:y)){
+            type <- data1[data1$Nb_call == m, "Type_call"]
+        #    print(type)
+            gramme <- paste(gramme, type, sep="")
+   #         print(gramme)
+          }
+      
+          {if(gramme %in% colnames(xdata3)){
+         #   print("TRUE")
+            xdata3[xdata3$seqID == as.character(id),gramme] <- sum(xdata3[xdata3$seqID == as.character(id),gramme], 1)}
+          else{
+            xdata3[,gramme] <- 0
+            xdata3[xdata3$seqID == as.character(id),gramme] <- sum(xdata3[xdata3$seqID == as.character(id),gramme], 1)
+}
+            }}
+        else{
+       #   print("distance bigger than the peak")
+          next
+            }
+          }
+        }
+      }
+    }
+  }
+}
+#}
+
+```
+
+
+### Bayesian proportion of 2-grams
+
+```{r}
+#Create the  2-grams slope
+xdata3$bigrSlope <- NA
+
+#Indicate what are the 2-grams that we want to extract from sequences and extract them
+targets <- c("A-A", "B-B", "A-B", "B-A", "B-D", "D-B", "D-D")
+for(i in 1:nrow(xdata3)) {
+  temp <- ngrams(S = as.character(xdata3$seqcall[i]), n = 2, xsep="-")
+  rownames(temp) <- as.character(temp$syl)
+  temp <- temp[targets, ]
+  if(NA %in% temp$cnt) temp$cnt[is.na(temp$cnt)] <- 0
+#  xdata3[i, c("NgramAA", "NgramBB", "NgramAB", "NgramBA", "NgramBD", "NgramDB", "NgramDD")] <- t(temp[,2])
+  temp <- sort(temp$cnt, decreasing = T)
+  xdata3$bigrSlope[i] <- lm(temp ~ c(1:7))$coefficients[2]
+  rm(temp)
+}
+
+#Transform the counts into Bayesian probabilities (i.e. we add 1 and divide by 34 
+#(9 2-grams in the sequence + 25 possible 2-grams)) 
+#xdata3$NgramAA <- (xdata3$NgramAA+1)/34
+#xdata3$NgramBB <- (xdata3$NgramBB+1)/34
+#xdata3$NgramBA <- (xdata3$NgramBA+1)/34
+#xdata3$NgramAB <- (xdata3$NgramAB+1)/34
+#xdata3$NgramBD <- (xdata3$NgramBD+1)/34
+#xdata3$NgramDB <- (xdata3$NgramDB+1)/34
+#xdata3$NgramDD <- (xdata3$NgramDD+1)/34
+
+```
+
+### Shannon entropy
+
+Regression coefficient from the zero, first and second order Shannon entropy
+
+```{r}
+#Create the empty column
+xdata3$entroSlope <- NA
+
+#Extract the Zero, first and second order Shannon entropy 
+#and extract the regression coefficient from the three values
+for (i in 1:nrow(xdata3)) {
+  # collect the three entropy values...
+  temp <- entropy(as.character(xdata3$seqcall[i]), n=0)
+  temp <- c(temp, entropy(as.character(xdata3$seqcall[i]), n=1))
+  temp <- c(temp, entropy(as.character(xdata3$seqcall[i]), n=2))
+  # and run regression
+  xdata3$entroSlope[i] <- lm(temp ~ c(1:3))$coefficients[2]
+  rm(temp)
+}
+```
+
+### Bayesian probability of transition
+
+```{r}
+#Create a matrix of transition: first column= the first call; first row= the second call
+strumat <- matrix(1, ncol=5, nrow=6)
+colnames(strumat) <- c("A", "B", "C", "D", "E")
+rownames(strumat) <- c("start", "A", "B", "C", "D", "E")
+strumat[1,3] <- 0
+strumat[1,4] <- 0
+strumat[1,5] <- 0 #Define which transitions is not possible, 
+#here it is not possible to begin the sequence with a C-call, BS-call (E) and a AS-call (D) since 
+#it is not an alarm call
+
+#Define what are the important transitions
+targets <- c("start-A", "start-B", "A-A", "A-B", "B-A", "B-B", "B-D", "D-B", "D-D")
+# Integrate a column for each transition probability in the big dataset
+xdata3 <- cbind(xdata3, NA, NA, NA, NA, NA, NA, NA, NA, NA)
+colnames(xdata3)[(ncol(xdata3)-8) : ncol(xdata3)] <- targets
+
+#extract all the Bayesian transition probabilities that we selected before
+for(i in 1:nrow(xdata3)) {
+  temp <- transitions(as.character(xdata3$seqcall[i]), strucmat=strumat,
+                      xstart=T, xstop=F, out="bayes")
+  xdata3[i, targets] <- sapply(targets, function(X) 
+    temp[strsplit(X, "-")[[1]][1], strsplit(X, "-")[[1]][2]])
+  rm(temp)
+}
+#Give names of the transitions to the columns
+targets <- c("tpSA", "tpSB", "tpAA", "tpAB", "tpBA", "tpBB", "tpBD", "tpDB", "tpDD")
+colnames(xdata3)[(ncol(xdata3)-8) : ncol(xdata3)] <- targets
+rm(targets)
+
+```
+
+### Add social informations
+
+```{r}
+
+# read data from the excel file provided with the script, "additional_info". 
+#It contains more info for each sequence
+social_data <- read.delim('Data/dataset_pred_prez_50-calls_add-info.txt')
+
+#Add it to xdata2
+final_dataset_10 <- left_join(xdata3, social_data)
+
+```
+### Create a dataset from the data
+
+```{r}
+write.table(final_dataset_10, file = "Data/10_calls_metrics.txt", sep = "\t",
+            row.names = TRUE)
+```
