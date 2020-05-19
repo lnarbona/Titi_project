@@ -7,7 +7,7 @@ output: html_notebook
 #Load dataset and libraries
 ```{r}
 # Load the dataset
-DataTot <- read.delim('10_calls_metrics.txt')
+DataTot <- read.delim('Data/10_calls_metrics.txt')
 
 # load the libraries
 library(randomForest)
@@ -16,10 +16,26 @@ library(rpart)
 library(rpart.plot)
 library(ggplot2)
 library(cowplot)
+```
 
+#Create the used Datasets
+```{r}
 #Dataset with the explicative data
-Data_ctxt_excecpt_group_ind <- DataTot[, c("preda","loca","dis","Predator","Height_model","Height_ind","Num_ind","Num_In","Num_Jv","Num_Sb","Jv_fem","Sb_fem","Ad_fem","Paired_Ad","Non_paried_Ad")]
+explicative_columns <- c("preda","loca","dis","Predator","Height_model","Height_ind","Num_ind","Num_In","Num_Jv","Num_Sb","Jv_fem","Sb_fem","Ad_fem","Paired_Ad","Non_paried_Ad")
+Data_ctxt_excecpt_group_ind <- DataTot[, explicative_columns]
 
+
+#Data_ctxt_excecpt_group_ind[explicative_columns] <- lapply(Data_ctxt_excecpt_group_ind[explicative_columns], factor)#convert all columns into factors
+
+#Dataset with only the metrics
+Data_metrics <- DataTot 
+Data_metrics[, c("seqID", "Name_seq","group","ind","preda","loca","dis","Predator","Height_model",
+            "Height_ind","Num_ind","Num_In","Num_Jv","Num_Sb","Jv_fem","Sb_fem","Ad_fem",
+            "Paired_Ad","Non_paried_Ad", "propB")] <- NULL
+```
+
+#Definition of the Random Forest function 
+```{r}
 random_forest <- function(variabl, dataset = Data_ctxt_excecpt_group_ind){
   #Add the variable to explain
   Data_ctxt_excecpt_group_ind$VAR <- DataTot[,variabl]
@@ -36,49 +52,25 @@ random_forest <- function(variabl, dataset = Data_ctxt_excecpt_group_ind){
   (fit <- randomForest(VAR ~., data = Data_ctxt_excecpt_group_ind, na.action = na.omit,
                       importance=TRUE))
   impToPlot <- importance(fit)
+  png(filename=sprintf("%s percentage Variable explained.png", variabl))
   dotchart(sort(impToPlot[,1]), xlim=c(0,30), xlab="%IncMSE", main="TITLE") # 500x450
+  dev.off()
   
   # Création d'un arbre de décision, avec les variables sélectionnées par VSURF
   
   YieldRT <- rpart(VAR ~., data = Data_ctxt_excecpt_group_ind)
-  png(filename=sprintf("%s.png", variabl))
+  png(filename=sprintf("%s for first 10 calls.png", variabl))
   prp(YieldRT, box.palette = "Greens", extra=1, varlen=0, main = sprintf("%s", variabl)) #850x700
   dev.off()
 }
 
-DataTot[, c("seqID", "Name_seq","group","ind","preda","loca","dis","Predator","Height_model",
-            "Height_ind","Num_ind","Num_In","Num_Jv","Num_Sb","Jv_fem","Sb_fem","Ad_fem",
-            "Paired_Ad","Non_paried_Ad", "propB")] <- NULL
-
-for (variabl in names(DataTot)){
-  random_forest(variabl)
-}
-
-
-# Random forest
-#set.seed(1808)
-#data.imputed <- rfImpute(preda ~ ., data=DataTot, iter=6)
-#model <- randomForest(propA ~ ., data = DataTot, na.action = na.omit, proximity=TRUE, ntree=2000, mtry=46, importance=TRUE)
-#varImpPlot(model, main="Predator prediction", type=1)#Pour afficher quelles sont les meilleurs variables à utiliser
-#varImpPlot(model, main="Predator prediction", type=1, n.var=26) #ceux qui sont > que 0 sauf "Predator" psq evidentment c'est une var qui influis
 ```
 
-#Different data
-
+#Application of the function over all metrics of the sequences
 ```{r}
-#Data avec tout sauf seqID et seqCall
-#Data_except_seqid_call <- DataTot[, c("group","ind","preda","loca","dis","first_call","element","propA","propB","propC","propD","propE","meaninterval","CVinterval","NgramAA","NgramBB","NgramAB","NgramBA","NgramBD","NgramDB","NgramDD","NgSlope","entroSlope","tpSA","tpSB","tpAA","tpAB","tpBA","tpBB","tpBD","tpDB","tpDD","Predator","Height_model","Height_ind","Num_ind","Num_In","Num_Jv","Num_Sb","Jv_fem","Sb_fem","Ad_fem","Paired_Ad","Non_paried_Ad")]
+random_forest("gramme.BB")
 
-#Data que avec des characteristiques du context + la characteristique de la sequence testee
-#Data_All_context <- DataTot[, c("group","ind","preda","loca","dis","Predator","Height_model","Height_ind","Num_ind","Num_In","Num_Jv","Num_Sb","Jv_fem","Sb_fem","Ad_fem","Paired_Ad","Non_paried_Ad", "propB")]
-
-#Data que avec des characteristiques du ctxt, sauf groupe et ind + la characteristique de la sequence testee
-
-```
-
-#Creer RT
-
-```{r}
-#ClassRT <- rpart(propB ~ ., data = Data_ctxt_excecpt_group_ind) #Pour le créer
-#prp(ClassRT, box.palette = "Greens", extra=1, varlen=0, main = "Classes de compromis")#Pour l'afficher + customiser
+#for (variabl in names(Data_metrics)){
+#  random_forest(variabl)
+#}
 ```

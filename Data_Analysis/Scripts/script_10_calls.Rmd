@@ -136,7 +136,7 @@ for (id in seqID) {
        #   print("discance littler than peak")
       #    print(distance1)
           
-          gramme <- "gramme-"
+          gramme <- paste(as.character(j+1), "gramme-", sep="")
           y <- i+j 
           for (m in c(i:y)){
             type <- data1[data1$Nb_call == m, "Type_call"]
