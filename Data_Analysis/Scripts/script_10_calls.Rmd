@@ -292,9 +292,9 @@ strumat[1,5] <- 0 #Define which transitions is not possible,
 #it is not an alarm call
 
 #Define what are the important transitions
-targets <- c("start-A", "start-B", "A-A", "A-B", "A-D", "A-E", "B-A", "B-B", "B-D", "B-E", "D-A", "D-B", "D-D", "D-E", "E-A", "E-B", "E-D", "E-E")
+targets <- c("start-A", "start-B", "A-A", "A-B", "A-C", "A-D", "A-E", "B-A", "B-B", "B-C", "B-D", "B-E", "D-A", "D-B", "D-C", "D-D", "D-E", "E-A", "E-B", "E-C", "E-D", "E-E")
 # Integrate a column for each transition probability in the big dataset
-xdata3 <- cbind(xdata3,  NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA)
+xdata3 <- cbind(xdata3, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA)
 colnames(xdata3)[(ncol(xdata3)-21) : ncol(xdata3)] <- targets
 
 #extract all the Bayesian transition probabilities that we selected before
@@ -306,7 +306,7 @@ for(i in 1:nrow(xdata3)) {
   rm(temp)
 }
 #Give names of the transitions to the columns
-targets <- c("tpSA", "tpSB", "tpAA", "tpAB", "tpAD", "tpAE", "tpBA", "tpBB", "tpBD", "tpBE", "tpDA", "tpDB", "tpDD", "tpDE", "tpEA", "tpEB", "tpED", "tpEE")
+targets <- c("tpSA", "tpSB", "tpAA", "tpAB", "tpAC", "tpAD", "tpAE", "tpBA", "tpBB", "tpBC", "tpBD", "tpBE", "tpDA", "tpDB", "tpDC", "tpDD", "tpDE", "tpEA", "tpEB", "tpEC", "tpED", "tpEE")
 colnames(xdata3)[(ncol(xdata3)-21) : ncol(xdata3)] <- targets
 rm(targets)
 

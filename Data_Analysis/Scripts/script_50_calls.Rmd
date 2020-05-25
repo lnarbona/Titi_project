@@ -286,19 +286,22 @@ for (i in 1:nrow(xdata2)) {
 
 ```{r}
 #Create a matrix of transition: first column= the first call; first row= the second call
-strumat <- matrix(1, ncol=5, nrow=6)
-colnames(strumat) <- c("A", "B", "C", "D", "E")
-rownames(strumat) <- c("start", "A", "B", "C", "D", "E")
+strumat <- matrix(1, ncol=6, nrow=7)
+colnames(strumat) <- c("A", "B", "C", "D", "E", "N")
+rownames(strumat) <- c("start", "A", "B", "C", "D", "E", "N")
 strumat[1,3] <- 0
 strumat[1,4] <- 0
-strumat[1,5] <- 0 #Define which transitions is not possible, 
+strumat[1,5] <- 0
+strumat[,6] <- 0
+strumat[6,] <- 0#Define which transitions is not possible, 
 #here it is not possible to begin the sequence with a C-call, BS-call (E) and a AS-call (D) since 
-#the first one is not an alarm call and the other ones are 
+#the first one is not an alarm call and the other ones are present later in the sequence
+#Plus, NA calls are not informative so I set their probabilities to 0
 
 #Define what are the important transitions
 targets <- c("start-A", "start-B", "A-A", "A-B", "A-C", "A-D", "A-E", "B-A", "B-B", "B-C", "B-D", "B-E", "D-A", "D-B", "D-C", "D-D", "D-E", "E-A", "E-B", "E-C", "E-D", "E-E")
 # Integrate a column for each transition probability in the big dataset
-xdata2 <- cbind(xdata2,  NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA)
+xdata2 <- cbind(xdata2, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA)
 colnames(xdata2)[(ncol(xdata2)-21) : ncol(xdata2)] <- targets
 
 #extract all the Bayesian transition probabilities that we selected before
