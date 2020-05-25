@@ -31,7 +31,7 @@ The aim of this script is i) to create a data file with, for each sequence, the 
 # read data from the excel file provided with the script, "predator presentations" dataset. 
 #It contains 50 sequences of 10 calls each.
 xdata <- read.delim('Data/dataset_pred_prez_50-calls_chgd.txt')
-xdata$Seq1 <- as.factor(xdata$Seq1)
+#xdata$Seq1 <- as.factor(xdata$Seq1)
 
 #Calls of each sequences are given in column, transform them into character strings
 SeqCalls <- sapply(unique(xdata$Seq1), function(X) 
@@ -69,14 +69,21 @@ callintervals <- function(xdata, seqID, seqcol, starttime, endtime, outp="mean")
   return(res)
 }
 
+#Function Bayesian probabilities
+bayesian_mean <- function(count_of_i, alpha_i, nb_of_events, k, multipl=1) {
+  mean_i <- sum(count_of_i*multipl, alpha_i)/sum(nb_of_events, k*alpha_i) #"multipl" just in case 
+                                                                          #the value was already a proportion
+  return(mean_i)
+}
+
 #Fill the dataset with the slope of elements, the proportion of A-calls, 
 #the mean call interval and the coefficient of variation of the call interval.
 
 for(i in 1:nrow(xdata2)) {
-  xdata2$elementA[i] <- elementslope(as.character(xdata3$seqcall[i]), type="linear", target="A")
-  xdata2$elementB[i] <- elementslope(as.character(xdata3$seqcall[i]), type="linear", target="B")
-  xdata2$elementD[i] <- elementslope(as.character(xdata3$seqcall[i]), type="linear", target="D")
-  xdata2$elementE[i] <- elementslope(as.character(xdata3$seqcall[i]), type="linear", target="E")    
+  xdata2$elementA[i] <- elementslope(as.character(xdata2$seqcall[i]), type="linear", target="A")
+  xdata2$elementB[i] <- elementslope(as.character(xdata2$seqcall[i]), type="linear", target="B")
+  xdata2$elementD[i] <- elementslope(as.character(xdata2$seqcall[i]), type="linear", target="D")
+  xdata2$elementE[i] <- elementslope(as.character(xdata2$seqcall[i]), type="linear", target="E")    
   xdata2$propA[i] <- elementprop(as.character(xdata2$seqcall[i]), target = "A")
   xdata2$propB[i] <- elementprop(as.character(xdata2$seqcall[i]), target = "B")
   xdata2$propC[i] <- elementprop(as.character(xdata2$seqcall[i]), target = "C")
@@ -89,91 +96,169 @@ for(i in 1:nrow(xdata2)) {
 }
 
 #Bayesian proportion of A, B, C, BS and AS-calls (i.e. we add 1 to the number of calls in the sequence and divide 
-#by 55 (5 possibilities of calls (A,B,C,BS, and AS) + 50 calls in the sequence))
-xdata2$propA <- ((xdata2$propA*50)+1)/55
-xdata2$propB <- ((xdata2$propB*50)+1)/55
-xdata2$propC <- ((xdata2$propC*50)+1)/55
-xdata2$propD <- ((xdata2$propD*50)+1)/55
-xdata2$propE <- ((xdata2$propE*50)+1)/55
+#by 15 (5 possibilities of calls (A,B,C,BS, and AS) + 10 calls in the sequence))
+
+xdata2$propA <- sapply(xdata2$propA, bayesian_mean, 1/5, 50, 5, 50)
+xdata2$propB <- sapply(xdata2$propB, bayesian_mean, 1/5, 50, 5, 50)
+xdata2$propC <- sapply(xdata2$propC, bayesian_mean, 1/5, 50, 5, 50)
+xdata2$propD <- sapply(xdata2$propD, bayesian_mean, 1/5, 50, 5, 50)
+xdata2$propE <- sapply(xdata2$propE, bayesian_mean, 1/5, 50, 5, 50)
+
 ```
+
 ### Computation of ngrams
+
 ```{r}
 peak <- 0.3183865 #Computed in script_graph
 seqID <- unique(xdata$Seq1) 
 nb_calls <- head(unique(xdata$Nb_call), -1)
+target_calls <- c("A", "B", "D", "E")
 
-#ngrammes <- function(data, data2, peak=peak, seqID=seqID){
+#Creation of the needed columns of data (from bi to pentagrams):
+for (call1 in target_calls) {
+  for (call2 in target_calls){
+      bigram <- paste("bigram_", call1, call2, sep="")
+      xdata2[,bigram] <- 0
+    for (call3 in target_calls){
+      trigram <- paste("trigram_", call1, call2, call3, sep="")
+      xdata2[,trigram] <- 0
+      for (call4 in target_calls){
+        tetragram <- paste("tetragram_", call1, call2, call3, call4, sep="")
+        xdata2[,tetragram] <- 0
+        for (call5 in target_calls){
+          pentagram <- paste("pentagram_", call1, call2, call3, call4, call5, sep="")
+          xdata2[,pentagram] <- 0
+        }
+      }
+    }
+  }
+  rm(call1, call2, call3, call4, call5)
+}
+
+prefixes <- c("bi", "tri", "tetra", "penta")
+
 for (id in seqID) {
   data1 <- xdata[xdata$Seq1 == as.character(id),]
+  data1 <- data1[1:10,]
   for (i in nb_calls){
     for (j in 1:4){
-      end1 <- data1[data1$Nb_call == i + j - 1, "End_call"]
-      begin1 <- data1[data1$Nb_call == i + j, "Begin_call"]
-      distance1 <- begin1 - end1
-
-      {if(distance1 < 0 || identical(distance1, numeric(0))){
-        next}
-      else{
-#       end <- data1[data1$Nb_call == i, "End_call"]
-#       begin <- data1[data1$Nb_call == i + j, "Begin_call"]
-#       distance <- begin - end
-       
-       {if(distance1 < peak){
-          gramme <- paste(as.character(j+1), "gramme-", sep="")
-          y <- i+j 
-          for (m in c(i:y)){
-            type <- data1[data1$Nb_call == m, "Type_call"]
-            gramme <- paste(gramme, type, sep="")
-          }
-      
-          {if(gramme %in% colnames(xdata2)){
-            xdata2[xdata2$seqID == as.character(id),gramme] <- sum(xdata2[xdata2$seqID == as.character(id),gramme], 1)}
-          else{
-            xdata2[,gramme] <- 0
-            xdata2[xdata2$seqID == as.character(id),gramme] <- sum(xdata2[xdata2$seqID == as.character(id),gramme], 1)
-}
-            }}
+       end1 <- data1[data1$Nb_call == i + j - 1, "End_call"]
+       begin1 <- data1[data1$Nb_call == i + j, "Begin_call"]
+       distance1 <- begin1 - end1
+       {if(distance1 < 0 || identical(distance1, numeric(0))){
+         next
+       }
         else{
-          next
+          {if(distance1 >= peak){
+            gram <- paste(prefixes[[j]], "gram_", sep="")
+            print(gram)
+            y <- i+j
+            for (m in c(i:y)){
+              type <- data1[data1$Nb_call == m, "Type_call"]
+              gram <- paste(gram, type, sep="")
+              print(gram)
             }
+            {if (!(gram %in% names(xdata2))) {
+              next
+            }
+            else{
+                xdata2[xdata2$seqID == as.character(id),gram] <- sum(xdata2[xdata2$seqID == as.character(id),gram], 1)
+            }
+            }
+          }
+           else{
+          next}
+           
           }
         }
       }
     }
   }
+  rm(id,i, j, m, data1,end1,begin1,distance1,gram,type,y)
 }
+
+
 
 ```
 
-### Bayesian proportion of 2-grams
+### Slope of ngrams and Bayesian proportion of ngrams
 
 ```{r}
-#Create the columns for the four N-grams that we are interested in 
-#(2-grams AA, BB, AB, BA) and the 2-grams slope
-xdata2$bigrSlope <- NA
+#take the index of columns representing the number of ngrams, etc.
+id_bigram_columns <- grep("bigram_", names(xdata2)) 
+id_trigram_columns <- grep("trigram_", names(xdata2))
+id_tetragram_columns <- grep("tetragram_", names(xdata2))
+id_pentagram_columns <- grep("pentagram_", names(xdata2))
 
-#Indicate what are the 2-grams that we want to extract from sequences and extract them
-targets <- c("A-A", "B-B", "A-B", "B-A", "B-D", "D-B", "D-D")
-for(i in 1:nrow(xdata2)) {
-  temp <- ngrams(S = as.character(xdata2$seqcall[i]), n = 2, xsep="-")
-  rownames(temp) <- as.character(temp$syl)
-  temp <- temp[targets, ]
-  if(NA %in% temp$cnt) temp$cnt[is.na(temp$cnt)] <- 0
-  xdata2[i, c("NgramAA", "NgramBB", "NgramAB", "NgramBA", "NgramBD", "NgramDB", "NgramDD")] <- t(temp[,2])
-  temp <- sort(temp$cnt, decreasing = T)
-  xdata2$bigrSlope[i] <- lm(temp ~ c(1:7))$coefficients[2]
-  rm(temp)
+#Create the columns in the dataset
+xdata2$slope_bigram <- NA
+xdata2$slope_trigram <- NA
+xdata2$slope_tetragram <- NA
+xdata2$slope_pentagram <- NA
+
+#For each sequence, fill the slopes & calculate each Bayesian proportion of the ngrams
+for(row in 1:nrow(xdata2)) {
+  bi_temp <- data.frame(gram=character(), cnt=numeric(), stringsAsFactors=FALSE)
+  tri_temp <- data.frame(gram=character(), cnt=numeric(), stringsAsFactors=FALSE)
+  tetra_temp <- data.frame(gram=character(), cnt=numeric(), stringsAsFactors=FALSE)
+  penta_temp <- data.frame(gram=character(), cnt=numeric(), stringsAsFactors=FALSE)
+  
+  total_bigrams <- sum(xdata2[row, id_bigram_columns])
+  total_trigrams <- sum(xdata2[row, id_bigram_columns])
+  total_tetragrams <- sum(xdata2[row, id_bigram_columns])
+  total_pentagrams <- sum(xdata2[row, id_bigram_columns])
+  
+  alpha_bi <- 1/length(id_bigram_columns)
+  alpha_tri <- 1/length(id_trigram_columns)
+  alpha_tetra <- 1/length(id_tetragram_columns)
+  alpha_penta <- 1/length(id_pentagram_columns)
+
+  for (id in id_bigram_columns){
+    bi_temp[nrow(bi_temp) + 1,] = c(names(xdata2[id]), xdata2[row,id])
+    rownames(bi_temp) <- as.character(bi_temp$gram)
+    
+    xdata2[row, id] <- bayesian_mean(xdata2[row, id],alpha_bi, total_bigrams, length(id_bigram_columns))
+  }
+  for (id in id_trigram_columns){
+    tri_temp[nrow(tri_temp) + 1,] = c(names(xdata2[id]), xdata2[row,id])
+    rownames(tri_temp) <- as.character(tri_temp$gram)
+    
+    xdata2[row, id] <- bayesian_mean(xdata2[row, id],alpha_tri, total_trigrams, length(id_trigram_columns))
+  }
+  for (id in id_tetragram_columns){
+    tetra_temp[nrow(tetra_temp) + 1,] = c(names(xdata2[id]), xdata2[row,id])
+    rownames(tetra_temp) <- as.character(tetra_temp$gram)
+
+    xdata2[row, id] <- bayesian_mean(xdata2[row, id],alpha_tetra, total_tetragrams, length(id_tetragram_columns))
+  }
+  for (id in id_pentagram_columns){
+    penta_temp[nrow(penta_temp) + 1,] = c(names(xdata2[id]), xdata2[row,id])
+    rownames(penta_temp) <- as.character(penta_temp$gram)
+  
+    xdata2[row, id] <- bayesian_mean(xdata2[row, id],alpha_penta, total_pentagrams, length(id_pentagram_columns))
+    
+    }
+  
+  bi_temp <- sort(as.numeric(bi_temp$cnt), decreasing = T)
+  tri_temp <- sort(as.numeric(tri_temp$cnt), decreasing = T)
+  tetra_temp <- sort(as.numeric(tetra_temp$cnt), decreasing = T)
+  penta_temp <- sort(as.numeric(penta_temp$cnt), decreasing = T)
+  
+  xdata2$slope_bigram[row] <- lm(bi_temp ~ c(1:length(bi_temp)))$coefficients[2]
+  xdata2$slope_trigram[row] <- lm(tri_temp ~ c(1:length(tri_temp)))$coefficients[2]
+  xdata2$slope_tetragram[row] <- lm(tetra_temp ~ c(1:length(tetra_temp)))$coefficients[2]
+  xdata2$slope_pentagram[row] <- lm(penta_temp ~ c(1:length(penta_temp)))$coefficients[2]
+
 }
 
-#Transform the counts into Bayesian probabilities (i.e. we add 1 and divide by 50 
-#(25 2-grams in the sequence + 25 possible 2-grams)) 
-xdata2$NgramAA <- (xdata2$NgramAA+1)/50
-xdata2$NgramBB <- (xdata2$NgramBB+1)/50
-xdata2$NgramBA <- (xdata2$NgramBA+1)/50
-xdata2$NgramAB <- (xdata2$NgramAB+1)/50
-xdata2$NgramBD <- (xdata2$NgramBD+1)/50
-xdata2$NgramDB <- (xdata2$NgramDB+1)/50
-xdata2$NgramDD <- (xdata2$NgramDD+1)/50
+#Check Bayesian proportions
+for(row in 1:nrow(xdata2)) {
+  print(sum(xdata2[row, id_bigram_columns]))
+  print(sum(xdata2[row, id_trigram_columns]))
+  print(sum(xdata2[row, id_tetragram_columns]))
+  print(sum(xdata2[row, id_pentagram_columns]))
+}
+
 ```
 
 ### Shannon entropy
@@ -201,21 +286,20 @@ for (i in 1:nrow(xdata2)) {
 
 ```{r}
 #Create a matrix of transition: first column= the first call; first row= the second call
-strumat <- matrix(1, ncol=6, nrow=7)
-colnames(strumat) <- c("A", "B", "C", "D", "E", "N")
-rownames(strumat) <- c("start", "A", "B", "C", "D", "E", "N")
+strumat <- matrix(1, ncol=5, nrow=6)
+colnames(strumat) <- c("A", "B", "C", "D", "E")
+rownames(strumat) <- c("start", "A", "B", "C", "D", "E")
 strumat[1,3] <- 0
 strumat[1,4] <- 0
-strumat[1,5] <- 0
-strumat[1,6] <- 0#Define which transitions is not possible, 
+strumat[1,5] <- 0 #Define which transitions is not possible, 
 #here it is not possible to begin the sequence with a C-call, BS-call (E) and a AS-call (D) since 
-#it is not an alarm call
+#the first one is not an alarm call and the other ones are 
 
 #Define what are the important transitions
-targets <- c("start-A", "start-B", "A-A", "A-B", "B-A", "B-B", "B-D", "D-B", "D-D")
+targets <- c("start-A", "start-B", "A-A", "A-B", "A-C", "A-D", "A-E", "B-A", "B-B", "B-C", "B-D", "B-E", "D-A", "D-B", "D-C", "D-D", "D-E", "E-A", "E-B", "E-C", "E-D", "E-E")
 # Integrate a column for each transition probability in the big dataset
-xdata2 <- cbind(xdata2, NA, NA, NA, NA, NA, NA, NA, NA, NA)
-colnames(xdata2)[(ncol(xdata2)-8) : ncol(xdata2)] <- targets
+xdata2 <- cbind(xdata2,  NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA)
+colnames(xdata2)[(ncol(xdata2)-21) : ncol(xdata2)] <- targets
 
 #extract all the Bayesian transition probabilities that we selected before
 for(i in 1:nrow(xdata2)) {
@@ -226,11 +310,11 @@ for(i in 1:nrow(xdata2)) {
   rm(temp)
 }
 #Give names of the transitions to the columns
-targets <- c("tpSA", "tpSB", "tpAA", "tpAB", "tpBA", "tpBB", "tpBD", "tpDB", "tpDD")
-colnames(xdata2)[(ncol(xdata2)-8) : ncol(xdata2)] <- targets
+targets <- c("tpSA", "tpSB", "tpAA", "tpAB", "tpAC", "tpAD", "tpAE", "tpBA", "tpBB", "tpBC", "tpBD", "tpBE", "tpDA", "tpDB", "tpDC", "tpDD", "tpDE", "tpEA", "tpEB", "tpEC", "tpED", "tpEE")
+colnames(xdata2)[(ncol(xdata2)-21) : ncol(xdata2)] <- targets
 rm(targets)
-
 ```
+
 ### Add social informations
 
 ```{r}

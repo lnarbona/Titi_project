@@ -7,7 +7,7 @@ output: html_notebook
 #Load dataset and libraries
 ```{r}
 # Load the dataset
-DataTot <- read.delim('Data/10_calls_metrics.txt')
+DataTot <- read.delim('Data/50_calls_metrics.txt')
 
 # load the libraries
 library(randomForest)
@@ -21,44 +21,51 @@ library(cowplot)
 #Create the used Datasets
 ```{r}
 #Dataset with the explicative data
-explicative_columns <- c("preda","loca","dis","Predator","Height_model","Height_ind","Num_ind","Num_In","Num_Jv","Num_Sb","Jv_fem","Sb_fem","Ad_fem","Paired_Ad","Non_paried_Ad")
-Data_ctxt_excecpt_group_ind <- DataTot[, explicative_columns]
+explicative_columns <- c("group", "preda","loca","dis","Predator","Height_model","Height_ind","Num_ind","Num_In","Num_Jv","Num_Sb","Jv_fem","Sb_fem","Ad_fem","Paired_Ad","Non_paried_Ad")
+Data_ctxt_excecpt_ind <- DataTot[, explicative_columns]
+Data_ctxt_excecpt_ind$Height_model <- as.numeric(Data_ctxt_excecpt_ind$Height_model)
+Data_ctxt_excecpt_ind[sapply(Data_ctxt_excecpt_ind, is.integer)] <- lapply(Data_ctxt_excecpt_ind[sapply(Data_ctxt_excecpt_ind, is.integer)], as.numeric)
 
-
-#Data_ctxt_excecpt_group_ind[explicative_columns] <- lapply(Data_ctxt_excecpt_group_ind[explicative_columns], factor)#convert all columns into factors
+#Data_ctxt_excecpt_ind[explicative_columns] <- lapply(Data_ctxt_excecpt_ind[explicative_columns], factor)#convert all columns into factors
 
 #Dataset with only the metrics
 Data_metrics <- DataTot 
 Data_metrics[, c("seqID", "Name_seq","group","ind","preda","loca","dis","Predator","Height_model",
             "Height_ind","Num_ind","Num_In","Num_Jv","Num_Sb","Jv_fem","Sb_fem","Ad_fem",
-            "Paired_Ad","Non_paried_Ad", "propB")] <- NULL
+            "Paired_Ad","Non_paried_Ad")] <- NULL
+
 ```
 
 #Definition of the Random Forest function 
 ```{r}
-random_forest <- function(variabl, dataset = Data_ctxt_excecpt_group_ind){
+random_forest <- function(variabl, dataset = Data_ctxt_excecpt_ind){
   #Add the variable to explain
-  Data_ctxt_excecpt_group_ind$VAR <- DataTot[,variabl]
+  Data_ctxt_excecpt_ind$VAR <- as.numeric(DataTot[,variabl])
 
   # Sélection des variables (peut prendre plusieurs minutes)
   set.seed(123)
-  Vyield <- VSURF(VAR ~ ., data = Data_ctxt_excecpt_group_ind, na.action = na.omit) 
+  Vyield <- VSURF(VAR ~ ., data = Data_ctxt_excecpt_ind, na.action = na.omit) 
   summary(Vyield)
 
   # list of "prediction stpe" selected variables (column number, the predicted variable is not taken into account)
   Vyield$varselect.pred 
 
   # Création d'une Random Forest avec les variable sélectionnées, pour pouvoir obtenir le "% var explained"
-  (fit <- randomForest(VAR ~., data = Data_ctxt_excecpt_group_ind, na.action = na.omit,
+  (fit <- randomForest(VAR ~., data = Data_ctxt_excecpt_ind, na.action = na.omit,
                       importance=TRUE))
+  var_explained <- fit$rsq[length(fit$rsq)]*100
+  print(var_explained)
+  #empty_df[nrow(empty_df) + 1,] = c(variabl, as.numeric(var_explained))
+  #return(empty_df)
+  
   impToPlot <- importance(fit)
-  png(filename=sprintf("%s percentage Variable explained.png", variabl))
+  png(filename=sprintf("%s.png", variabl))
   dotchart(sort(impToPlot[,1]), xlim=c(0,30), xlab="%IncMSE", main="TITLE") # 500x450
   dev.off()
   
   # Création d'un arbre de décision, avec les variables sélectionnées par VSURF
   
-  YieldRT <- rpart(VAR ~., data = Data_ctxt_excecpt_group_ind)
+  YieldRT <- rpart(VAR ~., data = Data_ctxt_excecpt_ind)
   png(filename=sprintf("%s for first 10 calls.png", variabl))
   prp(YieldRT, box.palette = "Greens", extra=1, varlen=0, main = sprintf("%s", variabl)) #850x700
   dev.off()
@@ -68,9 +75,58 @@ random_forest <- function(variabl, dataset = Data_ctxt_excecpt_group_ind){
 
 #Application of the function over all metrics of the sequences
 ```{r}
-random_forest("gramme.BB")
+random_forest("X2gramme.AB")
 
-#for (variabl in names(Data_metrics)){
-#  random_forest(variabl)
-#}
+empty_df2 <- data.frame(Variable=character(), Var_explained=numeric(), stringsAsFactors=FALSE)
+for (variabl in names(Data_metrics)){
+  #Add the variable to explain
+  Data_ctxt_excecpt_ind$VAR <- as.numeric(DataTot[,variabl])
+
+  # Sélection des variables (peut prendre plusieurs minutes)
+  set.seed(123)
+  #Vyield <- VSURF(VAR ~ ., data = Data_ctxt_excecpt_ind, na.action = na.omit) 
+  #summary(Vyield)
+
+  # list of "prediction stpe" selected variables (column number, the predicted variable is not taken into account)
+  #Vyield$varselect.pred 
+
+  # Création d'une Random Forest avec les variable sélectionnées, pour pouvoir obtenir le "% var explained"
+  (fit <- randomForest(VAR ~., data = Data_ctxt_excecpt_ind, na.action = na.omit,
+                      importance=TRUE))
+  var_explained <- fit$rsq[length(fit$rsq)]*100
+  print(var_explained)
+  empty_df2[nrow(empty_df2) + 1,] = c(variabl, as.numeric(var_explained))
+
+  #impToPlot <- importance(fit)
+  #png(filename=sprintf("%s.png", variabl))
+  #dotchart(sort(impToPlot[,1]), xlim=c(0,30), xlab="%IncMSE", main="TITLE") # 500x450
+  #dev.off()
+  
+  # Création d'un arbre de décision, avec les variables sélectionnées par VSURF
+  
+  #YieldRT <- rpart(VAR ~., data = Data_ctxt_excecpt_ind)
+  #png(filename=sprintf("%s for first 10 calls.png", variabl))
+  #prp(YieldRT, box.palette = "Greens", extra=1, varlen=0, main = sprintf("%s", variabl)) #850x700
+  #dev.off()
+}
+```
+
+#1. What is the distribution of % variance explained?
+```{r}
+max <- which.max(density(distances_df$lengths)$y)
+peak <- density(distances_df$lengths)$x[max]
+
+ggplot(data=empty_df2, aes(as.numeric(Var_explained))) + 
+  geom_histogram(aes(y =..density..), 
+        #         breaks=seq(-100, 100, by = 0.01),
+                 fill="blue",
+                 alpha = 0.8)+
+                 stat_bin(bins=129)+
+
+#  xlim(-1, 10) +
+#  geom_density(col=2, size = 1) + 
+#  geom_vline(xintercept = peak, size=1)+
+  labs(x="%variances explained", y="Count")+
+  ggtitle("% variance explained distribution (50 calls)")
+
 ```
