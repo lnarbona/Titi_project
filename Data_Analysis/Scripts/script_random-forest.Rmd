@@ -7,7 +7,7 @@ output: html_notebook
 #Load dataset and libraries
 ```{r}
 # Load the dataset
-DataTot <- read.delim('Data/50_calls_metrics.txt')
+DataTot <- read.delim('Data/10_calls_metrics.txt')
 
 # load the libraries
 library(randomForest)
@@ -36,97 +36,72 @@ Data_metrics[, c("seqID", "Name_seq","group","ind","preda","loca","dis","Predato
 
 ```
 
-#Definition of the Random Forest function 
+#Application of VSURF over all metrics of the sequences to choose the best ones
 ```{r}
-random_forest <- function(variabl, dataset = Data_ctxt_excecpt_ind){
-  #Add the variable to explain
-  Data_ctxt_excecpt_ind$VAR <- as.numeric(DataTot[,variabl])
 
-  # Sélection des variables (peut prendre plusieurs minutes)
-  set.seed(123)
-  Vyield <- VSURF(VAR ~ ., data = Data_ctxt_excecpt_ind, na.action = na.omit) 
-  summary(Vyield)
+#Create a dataset with the OOB for each metric
+OOB_df3 <- data.frame(Variable=character(), Var_explained=numeric(), stringsAsFactors=FALSE)
 
-  # list of "prediction stpe" selected variables (column number, the predicted variable is not taken into account)
-  Vyield$varselect.pred 
+#Create a dataset for those metrics that have an OOB > XX, the ones that can be better predicted by the predictive data
+metrics_variable <- data.frame(Variable=character(), Var_explained=list(), stringsAsFactors=FALSE)
 
-  # Création d'une Random Forest avec les variable sélectionnées, pour pouvoir obtenir le "% var explained"
-  (fit <- randomForest(VAR ~., data = Data_ctxt_excecpt_ind, na.action = na.omit,
-                      importance=TRUE))
-  var_explained <- fit$rsq[length(fit$rsq)]*100
-  print(var_explained)
-  #empty_df[nrow(empty_df) + 1,] = c(variabl, as.numeric(var_explained))
-  #return(empty_df)
-  
-  impToPlot <- importance(fit)
-  png(filename=sprintf("%s.png", variabl))
-  dotchart(sort(impToPlot[,1]), xlim=c(0,30), xlab="%IncMSE", main="TITLE") # 500x450
-  dev.off()
-  
-  # Création d'un arbre de décision, avec les variables sélectionnées par VSURF
-  
-  YieldRT <- rpart(VAR ~., data = Data_ctxt_excecpt_ind)
-  png(filename=sprintf("%s for first 10 calls.png", variabl))
-  prp(YieldRT, box.palette = "Greens", extra=1, varlen=0, main = sprintf("%s", variabl)) #850x700
-  dev.off()
-}
-
-```
-
-#Application of the function over all metrics of the sequences
-```{r}
-random_forest("X2gramme.AB")
-
-empty_df2 <- data.frame(Variable=character(), Var_explained=numeric(), stringsAsFactors=FALSE)
 for (variabl in names(Data_metrics)){
   #Add the variable to explain
   Data_ctxt_excecpt_ind$VAR <- as.numeric(DataTot[,variabl])
 
-  # Sélection des variables (peut prendre plusieurs minutes)
+  # Variable selection
   set.seed(123)
-  #Vyield <- VSURF(VAR ~ ., data = Data_ctxt_excecpt_ind, na.action = na.omit) 
-  #summary(Vyield)
-
-  # list of "prediction stpe" selected variables (column number, the predicted variable is not taken into account)
-  #Vyield$varselect.pred 
-
-  # Création d'une Random Forest avec les variable sélectionnées, pour pouvoir obtenir le "% var explained"
-  (fit <- randomForest(VAR ~., data = Data_ctxt_excecpt_ind, na.action = na.omit,
-                      importance=TRUE))
-  var_explained <- fit$rsq[length(fit$rsq)]*100
-  print(var_explained)
-  empty_df2[nrow(empty_df2) + 1,] = c(variabl, as.numeric(var_explained))
-
-  #impToPlot <- importance(fit)
-  #png(filename=sprintf("%s.png", variabl))
-  #dotchart(sort(impToPlot[,1]), xlim=c(0,30), xlab="%IncMSE", main="TITLE") # 500x450
-  #dev.off()
+  data_pred <- VSURF(VAR ~ ., data = Data_ctxt_excecpt_ind, na.action = na.omit) 
+  summary(data_pred)
   
-  # Création d'un arbre de décision, avec les variables sélectionnées par VSURF
+  #Take the OOB for each variable and add it to its dataset
+  OOB_pred <- data_pred$err.pred
+  OOB_df3[nrow(OOB_df3) + 1,] = c(variabl, OOB_pred)
+
   
-  #YieldRT <- rpart(VAR ~., data = Data_ctxt_excecpt_ind)
-  #png(filename=sprintf("%s for first 10 calls.png", variabl))
-  #prp(YieldRT, box.palette = "Greens", extra=1, varlen=0, main = sprintf("%s", variabl)) #850x700
-  #dev.off()
+  if (OOB_pred < XX){
+    # add list of "prediction step" selected variables into its dataset
+    id_var <- data_pred$varselect.pred
+    metrics_variable[nrow(metrics_variable) + 1,] = c(variabl, names(Data_ctxt_excecpt_ind[id_var]))
+  }
 }
+```
+
+#Do the following step for all the variables in the metrics_variable dataset
+```{r}
+# Création d'une Random Forest avec les variable sélectionnées, pour pouvoir obtenir le "% var explained"
+  (fit <- randomForest(VAR ~ var1+var2+var3, data = Data_ctxt_excecpt_ind, na.action = na.omit,
+                      importance=TRUE))
+  var_explained <- fit$rsq[length(fit$rsq)]*100 #To plot it in the graph for fit
+  #print(var_explained)
+  
+ # if (var_explained > 75){
+    impToPlot <- importance(fit)
+    png(filename=sprintf("%s.png", variabl))
+    dotchart(sort(impToPlot[,1]), xlim=c(0,30), xlab="%IncMSE", main="TITLE") # 500x450
+    dev.off()
+  
+    # Création d'un arbre de décision, avec les variables sélectionnées par VSURF
+  
+    YieldRT <- rpart(VAR ~ var1+var2+var3, data = Data_ctxt_excecpt_ind)
+    png(filename="VARIABLE for first 10 calls.png")
+    prp(YieldRT, box.palette = "Greens", extra=1, varlen=0, main = sprintf("%s", variabl)) #850x700
+    dev.off()
 ```
 
 #1. What is the distribution of % variance explained?
 ```{r}
-max <- which.max(density(distances_df$lengths)$y)
-peak <- density(distances_df$lengths)$x[max]
+#max <- which.max(density(distances_df$lengths)$y)
+#peak <- density(distances_df$lengths)$x[max]
 
-ggplot(data=empty_df2, aes(as.numeric(Var_explained))) + 
+png(filename="% variance explained_10.png")
+ggplot(data=empty_df3, aes(as.numeric(Var_explained))) + 
   geom_histogram(aes(y =..density..), 
-        #         breaks=seq(-100, 100, by = 0.01),
                  fill="blue",
                  alpha = 0.8)+
                  stat_bin(bins=129)+
-
-#  xlim(-1, 10) +
-#  geom_density(col=2, size = 1) + 
-#  geom_vline(xintercept = peak, size=1)+
-  labs(x="%variances explained", y="Count")+
+  labs(x="%variances explained_10", y="Count")+
   ggtitle("% variance explained distribution (50 calls)")
+dev.off()
 
 ```
