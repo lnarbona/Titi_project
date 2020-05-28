@@ -40,10 +40,7 @@ Data_metrics[, c("seqID", "Name_seq","group","ind","preda","loca","dis","Predato
 ```{r}
 
 #Create a dataset with the OOB for each metric
-OOB_df3 <- data.frame(Variable=character(), Var_explained=numeric(), stringsAsFactors=FALSE)
-
-#Create a dataset for those metrics that have an OOB > XX, the ones that can be better predicted by the predictive data
-metrics_variable <- data.frame(Variable=character(), Var_explained=list(), stringsAsFactors=FALSE)
+data_var_explained <- data.frame(Variable=character(), Var_explained=numeric(), stringsAsFactors=FALSE)
 
 for (variabl in names(Data_metrics)){
   #Add the variable to explain
@@ -53,40 +50,26 @@ for (variabl in names(Data_metrics)){
   set.seed(123)
   data_pred <- VSURF(VAR ~ ., data = Data_ctxt_excecpt_ind, na.action = na.omit) 
   summary(data_pred)
-  
-  #Take the OOB for each variable and add it to its dataset
-  OOB_pred <- data_pred$err.pred
-  OOB_df3[nrow(OOB_df3) + 1,] = c(variabl, OOB_pred)
 
+  #Take the variables predicted selected by VSURF  
+  id_var <- data_pred$varselect.pred
+  (fit <- randomForest(VAR ~ id_var, data = Data_ctxt_excecpt_ind, na.action = na.omit,
+                      importance=TRUE)) #Avec ce id_var j'ai le pb
+  var_explained <- fit$rsq[length(fit$rsq)]*100
+  data_var_explained[nrow(data_var_explained) + 1,] = c(variabl, var_explained)
   
-  if (OOB_pred < XX){
-    # add list of "prediction step" selected variables into its dataset
-    id_var <- data_pred$varselect.pred
-    metrics_variable[nrow(metrics_variable) + 1,] = c(variabl, names(Data_ctxt_excecpt_ind[id_var]))
-  }
-}
-```
-
-#Do the following step for all the variables in the metrics_variable dataset
-```{r}
-# Création d'une Random Forest avec les variable sélectionnées, pour pouvoir obtenir le "% var explained"
-  (fit <- randomForest(VAR ~ var1+var2+var3, data = Data_ctxt_excecpt_ind, na.action = na.omit,
-                      importance=TRUE))
-  var_explained <- fit$rsq[length(fit$rsq)]*100 #To plot it in the graph for fit
-  #print(var_explained)
-  
- # if (var_explained > 75){
+  if (var_explained > 75){
     impToPlot <- importance(fit)
     png(filename=sprintf("%s.png", variabl))
     dotchart(sort(impToPlot[,1]), xlim=c(0,30), xlab="%IncMSE", main="TITLE") # 500x450
     dev.off()
   
-    # Création d'un arbre de décision, avec les variables sélectionnées par VSURF
-  
-    YieldRT <- rpart(VAR ~ var1+var2+var3, data = Data_ctxt_excecpt_ind)
+    YieldRT <- rpart(VAR ~ id_var, data = Data_ctxt_excecpt_ind)
     png(filename="VARIABLE for first 10 calls.png")
     prp(YieldRT, box.palette = "Greens", extra=1, varlen=0, main = sprintf("%s", variabl)) #850x700
     dev.off()
+  }
+}
 ```
 
 #1. What is the distribution of % variance explained?
@@ -95,7 +78,7 @@ for (variabl in names(Data_metrics)){
 #peak <- density(distances_df$lengths)$x[max]
 
 png(filename="% variance explained_10.png")
-ggplot(data=empty_df3, aes(as.numeric(Var_explained))) + 
+ggplot(data=data_var_explained, aes(as.numeric(Var_explained))) + 
   geom_histogram(aes(y =..density..), 
                  fill="blue",
                  alpha = 0.8)+
