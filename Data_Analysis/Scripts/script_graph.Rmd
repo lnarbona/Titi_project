@@ -17,7 +17,7 @@ library(ggplot2)
 
 #1. What is the distribution of call-distances?
 ```{r}
-xdata33 <- read.delim('dataset_pred_prez_50-calls_chgd.txt')
+xdata <- read.delim('dataset_pred_prez_50-calls_chgd.txt')
 
 seqID <- c(3,4,7,8,11,13,14,15,17,18,21,22,23,24,27,28,31,32,33,34,36,37,40,41,42,43,44,45,46,47,48,52)
 
